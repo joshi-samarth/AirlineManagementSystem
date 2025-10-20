@@ -12,6 +12,7 @@ export default function Login() {
   });
 
   const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
   const [apiError, setApiError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -32,37 +33,75 @@ export default function Login() {
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
 
-  // Handle input change
+  // Real-time validation
+  const validateField = (name, value) => {
+    let error = '';
+
+    if (name === 'email') {
+      if (!value.trim()) {
+        error = 'Email is required';
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        error = 'Invalid email format';
+      }
+    }
+
+    if (name === 'password') {
+      if (!value) {
+        error = 'Password is required';
+      } else if (value.length < 6) {
+        error = `Password too short (${value.length}/6 characters)`;
+      }
+    }
+
+    return error;
+  };
+
+  // Handle input change with real-time validation
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
-    // Clear error for this field
-    if (errors[name]) {
+
+    // Validate in real-time if field has been touched
+    if (touched[name]) {
+      const error = validateField(name, value);
       setErrors(prev => ({
         ...prev,
-        [name]: ''
+        [name]: error
       }));
     }
+
+    // Clear API error when user starts typing
+    setApiError('');
   };
 
-  // Validate form
+  // Handle field blur (when user leaves the field)
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    setTouched(prev => ({
+      ...prev,
+      [name]: true
+    }));
+
+    const error = validateField(name, value);
+    setErrors(prev => ({
+      ...prev,
+      [name]: error
+    }));
+  };
+
+  // Validate all fields
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email address';
-    }
-
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
-    }
+    Object.keys(formData).forEach(key => {
+      const error = validateField(key, formData[key]);
+      if (error) {
+        newErrors[key] = error;
+      }
+    });
 
     return newErrors;
   };
@@ -71,6 +110,9 @@ export default function Login() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setApiError('');
+
+    // Mark all fields as touched
+    setTouched({ email: true, password: true });
 
     const newErrors = validateForm();
     if (Object.keys(newErrors).length > 0) {
@@ -96,7 +138,8 @@ export default function Login() {
       }
 
       login(response.data.token, response.data.user);
-      alert('Login successful! Redirecting...');
+      
+      // Navigate based on role
       navigate(
         response.data.user.role === 'admin' 
           ? '/admin/dashboard' 
@@ -128,7 +171,7 @@ export default function Login() {
       );
 
       login(response.data.token, response.data.user);
-      alert('Google login successful! Redirecting...');
+      
       navigate(
         response.data.user.role === 'admin' 
           ? '/admin/dashboard' 
@@ -176,15 +219,16 @@ export default function Login() {
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
+                onBlur={handleBlur}
                 placeholder="you@example.com"
                 autoComplete="email"
-                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
-                  errors.email
-                    ? 'border-red-500 focus:border-red-500'
-                    : 'border-gray-300 focus:border-blue-500'
+                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 transition ${
+                  errors.email && touched.email
+                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                    : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
                 }`}
               />
-              {errors.email && (
+              {errors.email && touched.email && (
                 <p className="text-red-500 text-sm mt-1 flex items-center">
                   <span className="mr-1">⚠️</span> {errors.email}
                 </p>
@@ -202,12 +246,13 @@ export default function Login() {
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
+                  onBlur={handleBlur}
                   placeholder="Enter your password"
                   autoComplete="current-password"
-                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
-                    errors.password
-                      ? 'border-red-500 focus:border-red-500'
-                      : 'border-gray-300 focus:border-blue-500'
+                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 transition ${
+                    errors.password && touched.password
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                      : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
                   }`}
                 />
                 <button
@@ -218,7 +263,7 @@ export default function Login() {
                   {showPassword ? '👁️' : '👁️‍🗨️'}
                 </button>
               </div>
-              {errors.password && (
+              {errors.password && touched.password && (
                 <p className="text-red-500 text-sm mt-1 flex items-center">
                   <span className="mr-1">⚠️</span> {errors.password}
                 </p>

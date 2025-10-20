@@ -8,7 +8,10 @@ export default function ProtectedRoute({ children, requiredRole = null }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <p className="text-xl">Loading...</p>
+        <div className="text-center">
+          <div className="text-4xl mb-4">✈️</div>
+          <p className="text-xl text-gray-600">Loading...</p>
+        </div>
       </div>
     );
   }

@@ -38,6 +38,7 @@ export default function App() {
           
           {/* Default Route */}
           <Route path="/" element={<Navigate to="/login" />} />
+          <Route path="*" element={<Navigate to="/login" />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

@@ -14,7 +14,7 @@ export function AuthProvider({ children }) {
     } else {
       setLoading(false);
     }
-  }, []);
+  }, [token]);
 
   const fetchUserInfo = async () => {
     try {
@@ -26,8 +26,10 @@ export function AuthProvider({ children }) {
       );
       setUser(response.data.user);
     } catch (error) {
+      console.error('Failed to fetch user info:', error);
       localStorage.removeItem('token');
       setToken(null);
+      setUser(null);
     } finally {
       setLoading(false);
     }

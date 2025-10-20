@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext';
 
 export default function Signup() {
   const [formData, setFormData] = useState({
@@ -12,11 +13,92 @@ export default function Signup() {
   });
 
   const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
   const [apiError, setApiError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const { login } = useContext(AuthContext);
   const navigate = useNavigate();
+
+  // Password requirements checker
+  const getPasswordRequirements = (password) => {
+    return {
+      length: password.length >= 8,
+      uppercase: /[A-Z]/.test(password),
+      number: /\d/.test(password),
+      special: /[@$!%*?&]/.test(password),
+    };
+  };
+
+  const passwordReqs = getPasswordRequirements(formData.password);
+  const allReqsMet = Object.values(passwordReqs).every(req => req);
+
+  // Real-time field validation
+  const validateField = (name, value) => {
+    let error = '';
+
+    switch (name) {
+      case 'fullName':
+        if (!value.trim()) {
+          error = 'Full name is required';
+        } else if (value.trim().length < 2) {
+          error = `Too short (${value.trim().length}/2 characters minimum)`;
+        } else if (value.trim().length > 50) {
+          error = 'Name too long (50 characters maximum)';
+        }
+        break;
+
+      case 'email':
+        if (!value.trim()) {
+          error = 'Email is required';
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+          error = 'Invalid email format';
+        }
+        break;
+
+      case 'age':
+        if (!value) {
+          error = 'Age is required';
+        } else if (isNaN(value)) {
+          error = 'Age must be a number';
+        } else if (value < 18) {
+          error = `Must be 18+ (currently ${value})`;
+        } else if (value > 120) {
+          error = 'Please enter a valid age';
+        }
+        break;
+
+      case 'password':
+        if (!value) {
+          error = 'Password is required';
+        } else {
+          const missing = [];
+          if (value.length < 8) missing.push(`${8 - value.length} more characters`);
+          if (!/[A-Z]/.test(value)) missing.push('1 uppercase letter');
+          if (!/\d/.test(value)) missing.push('1 number');
+          if (!/[@$!%*?&]/.test(value)) missing.push('1 special character');
+          
+          if (missing.length > 0) {
+            error = `Missing: ${missing.join(', ')}`;
+          }
+        }
+        break;
+
+      case 'confirmPassword':
+        if (!value) {
+          error = 'Please confirm your password';
+        } else if (formData.password && value !== formData.password) {
+          error = 'Passwords do not match';
+        }
+        break;
+
+      default:
+        break;
+    }
+
+    return error;
+  };
 
   // Handle input change
   const handleChange = (e) => {
@@ -25,64 +107,54 @@ export default function Signup() {
       ...prev,
       [name]: value
     }));
-    // Clear error for this field when user starts typing
-    if (errors[name]) {
+
+    // Real-time validation if field touched
+    if (touched[name]) {
+      const error = validateField(name, value);
       setErrors(prev => ({
         ...prev,
-        [name]: ''
+        [name]: error
       }));
     }
+
+    // Also revalidate confirmPassword if password changes
+    if (name === 'password' && touched.confirmPassword) {
+      const confirmError = formData.confirmPassword && value !== formData.confirmPassword 
+        ? 'Passwords do not match' 
+        : '';
+      setErrors(prev => ({
+        ...prev,
+        confirmPassword: confirmError
+      }));
+    }
+
+    setApiError('');
   };
 
-  // Validate form before submission
+  // Handle blur
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    setTouched(prev => ({
+      ...prev,
+      [name]: true
+    }));
+
+    const error = validateField(name, value);
+    setErrors(prev => ({
+      ...prev,
+      [name]: error
+    }));
+  };
+
+  // Validate all fields
   const validateForm = () => {
     const newErrors = {};
-
-    // Full Name validation
-    if (!formData.fullName.trim()) {
-      newErrors.fullName = 'Full name is required';
-    } else if (formData.fullName.trim().length < 2) {
-      newErrors.fullName = 'Full name must be at least 2 characters';
-    } else if (formData.fullName.trim().length > 50) {
-      newErrors.fullName = 'Full name must not exceed 50 characters';
-    }
-
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!emailRegex.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email address';
-    }
-
-    // Age validation
-    if (!formData.age) {
-      newErrors.age = 'Age is required';
-    } else if (isNaN(formData.age)) {
-      newErrors.age = 'Age must be a number';
-    } else if (formData.age < 18) {
-      newErrors.age = 'You must be at least 18 years old';
-    } else if (formData.age > 120) {
-      newErrors.age = 'Please enter a valid age';
-    }
-
-    // Password validation
-    const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-    } else if (formData.password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters';
-    } else if (!passwordRegex.test(formData.password)) {
-      newErrors.password = 'Password must contain: 1 uppercase letter, 1 number, 1 special character (@$!%*?&)';
-    }
-
-    // Confirm Password validation
-    if (!formData.confirmPassword) {
-      newErrors.confirmPassword = 'Please confirm your password';
-    } else if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
-    }
-
+    Object.keys(formData).forEach(key => {
+      const error = validateField(key, formData[key]);
+      if (error) {
+        newErrors[key] = error;
+      }
+    });
     return newErrors;
   };
 
@@ -91,7 +163,13 @@ export default function Signup() {
     e.preventDefault();
     setApiError('');
 
-    // Validate form
+    // Mark all as touched
+    const allTouched = Object.keys(formData).reduce((acc, key) => {
+      acc[key] = true;
+      return acc;
+    }, {});
+    setTouched(allTouched);
+
     const newErrors = validateForm();
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -111,11 +189,10 @@ export default function Signup() {
         }
       );
 
-      // Store token in localStorage
-      localStorage.setItem('token', response.data.token);
+      // Login the user immediately after successful signup
+      login(response.data.token, response.data.user);
 
-      // Show success message and redirect
-      alert('Signup successful! Redirecting...');
+      // Navigate to dashboard based on role
       navigate(
         response.data.user.role === 'admin' 
           ? '/admin/dashboard' 
@@ -166,14 +243,15 @@ export default function Signup() {
                 name="fullName"
                 value={formData.fullName}
                 onChange={handleChange}
+                onBlur={handleBlur}
                 placeholder="John Doe"
-                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
-                  errors.fullName
-                    ? 'border-red-500 focus:border-red-500'
-                    : 'border-gray-300 focus:border-blue-500'
+                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 transition ${
+                  errors.fullName && touched.fullName
+                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                    : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
                 }`}
               />
-              {errors.fullName && (
+              {errors.fullName && touched.fullName && (
                 <p className="text-red-500 text-sm mt-1 flex items-center">
                   <span className="mr-1">⚠️</span> {errors.fullName}
                 </p>
@@ -190,14 +268,15 @@ export default function Signup() {
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
+                onBlur={handleBlur}
                 placeholder="you@example.com"
-                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
-                  errors.email
-                    ? 'border-red-500 focus:border-red-500'
-                    : 'border-gray-300 focus:border-blue-500'
+                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 transition ${
+                  errors.email && touched.email
+                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                    : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
                 }`}
               />
-              {errors.email && (
+              {errors.email && touched.email && (
                 <p className="text-red-500 text-sm mt-1 flex items-center">
                   <span className="mr-1">⚠️</span> {errors.email}
                 </p>
@@ -214,16 +293,17 @@ export default function Signup() {
                 name="age"
                 value={formData.age}
                 onChange={handleChange}
+                onBlur={handleBlur}
                 placeholder="25"
                 min="18"
                 max="120"
-                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
-                  errors.age
-                    ? 'border-red-500 focus:border-red-500'
-                    : 'border-gray-300 focus:border-blue-500'
+                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 transition ${
+                  errors.age && touched.age
+                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                    : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
                 }`}
               />
-              {errors.age && (
+              {errors.age && touched.age && (
                 <p className="text-red-500 text-sm mt-1 flex items-center">
                   <span className="mr-1">⚠️</span> {errors.age}
                 </p>
@@ -241,11 +321,12 @@ export default function Signup() {
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
+                  onBlur={handleBlur}
                   placeholder="Enter a strong password"
-                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
-                    errors.password
-                      ? 'border-red-500 focus:border-red-500'
-                      : 'border-gray-300 focus:border-blue-500'
+                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 transition ${
+                    errors.password && touched.password
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                      : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
                   }`}
                 />
                 <button
@@ -256,20 +337,36 @@ export default function Signup() {
                   {showPassword ? '👁️' : '👁️‍🗨️'}
                 </button>
               </div>
-              {errors.password && (
+              {errors.password && touched.password && (
                 <p className="text-red-500 text-sm mt-1 flex items-center">
                   <span className="mr-1">⚠️</span> {errors.password}
                 </p>
               )}
-              <div className="mt-2 text-xs text-gray-600">
-                <p className="font-semibold">Password requirements:</p>
-                <ul className="list-disc list-inside space-y-1">
-                  <li>Minimum 8 characters</li>
-                  <li>At least 1 uppercase letter (A-Z)</li>
-                  <li>At least 1 number (0-9)</li>
-                  <li>At least 1 special character (@$!%*?&)</li>
-                </ul>
-              </div>
+              
+              {/* Live Password Requirements */}
+              {(formData.password || touched.password) && (
+                <div className="mt-2 space-y-1">
+                  <p className="text-xs font-semibold text-gray-600">Password requirements:</p>
+                  <div className="space-y-1">
+                    <div className={`flex items-center text-xs ${passwordReqs.length ? 'text-green-600' : 'text-gray-500'}`}>
+                      <span className="mr-2">{passwordReqs.length ? '✓' : '○'}</span>
+                      <span>At least 8 characters {formData.password ? `(${formData.password.length}/8)` : ''}</span>
+                    </div>
+                    <div className={`flex items-center text-xs ${passwordReqs.uppercase ? 'text-green-600' : 'text-gray-500'}`}>
+                      <span className="mr-2">{passwordReqs.uppercase ? '✓' : '○'}</span>
+                      <span>One uppercase letter (A-Z)</span>
+                    </div>
+                    <div className={`flex items-center text-xs ${passwordReqs.number ? 'text-green-600' : 'text-gray-500'}`}>
+                      <span className="mr-2">{passwordReqs.number ? '✓' : '○'}</span>
+                      <span>One number (0-9)</span>
+                    </div>
+                    <div className={`flex items-center text-xs ${passwordReqs.special ? 'text-green-600' : 'text-gray-500'}`}>
+                      <span className="mr-2">{passwordReqs.special ? '✓' : '○'}</span>
+                      <span>One special character (@$!%*?&)</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Confirm Password */}
@@ -283,11 +380,12 @@ export default function Signup() {
                   name="confirmPassword"
                   value={formData.confirmPassword}
                   onChange={handleChange}
+                  onBlur={handleBlur}
                   placeholder="Re-enter your password"
-                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
-                    errors.confirmPassword
-                      ? 'border-red-500 focus:border-red-500'
-                      : 'border-gray-300 focus:border-blue-500'
+                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 transition ${
+                    errors.confirmPassword && touched.confirmPassword
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                      : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
                   }`}
                 />
                 <button
@@ -298,7 +396,7 @@ export default function Signup() {
                   {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
                 </button>
               </div>
-              {errors.confirmPassword && (
+              {errors.confirmPassword && touched.confirmPassword && (
                 <p className="text-red-500 text-sm mt-1 flex items-center">
                   <span className="mr-1">⚠️</span> {errors.confirmPassword}
                 </p>
@@ -333,7 +431,7 @@ export default function Signup() {
             <div className="flex-1 border-t border-gray-300"></div>
           </div>
 
-          {/* Google Sign-Up (Optional) */}
+          {/* Google Sign-Up */}
           <button
             type="button"
             className="w-full py-3 rounded-lg border-2 border-gray-300 hover:border-blue-500 hover:bg-blue-50 font-semibold text-gray-700 transition"
