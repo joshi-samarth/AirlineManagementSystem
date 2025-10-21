@@ -33,10 +33,15 @@ exports.signup = async (req, res) => {
       return res.status(400).json({ message: 'Validation errors', errors });
     }
 
-    // Check if email already registered
-    const existingUser = await User.findOne({ where: { email } });
+    // Check if email already exists (for ANY user - admin or regular user)
+    const existingUser = await User.findOne({ where: { email: email.trim().toLowerCase() } });
     if (existingUser) {
-      return res.status(400).json({ message: 'Email already registered' });
+      return res.status(400).json({ 
+        message: 'Email already registered',
+        errors: { 
+          email: 'This email is already in use. Please login or use a different email.' 
+        }
+      });
     }
 
     // Hash password with bcrypt (10 salt rounds)
@@ -45,10 +50,10 @@ exports.signup = async (req, res) => {
     // Create user in database
     const user = await User.create({
       fullName,
-      email,
+      email: email.trim().toLowerCase(), // Store email in lowercase for consistency
       age: parseInt(age),
       password: hashedPassword,
-      role: 'user',
+      role: 'user', // Default role is 'user'
     });
 
     // Generate JWT token
@@ -65,7 +70,7 @@ exports.signup = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error(error);
+    console.error('Signup Error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -76,19 +81,48 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ message: 'Email and password required' });
+      return res.status(400).json({ 
+        message: 'Email and password required',
+        errors: {
+          email: !email ? 'Email is required' : '',
+          password: !password ? 'Password is required' : ''
+        }
+      });
     }
 
-    // Find user by email
-    const user = await User.findOne({ where: { email } });
-    if (!user || !user.password) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+    // Find user by email (case-insensitive)
+    const user = await User.findOne({ 
+      where: { email: email.trim().toLowerCase() } 
+    });
+
+    if (!user) {
+      return res.status(401).json({ 
+        message: 'Invalid email or password',
+        errors: {
+          email: 'No account found with this email'
+        }
+      });
+    }
+
+    // Check if user has a password (not a Google-only account)
+    if (!user.password) {
+      return res.status(401).json({ 
+        message: 'This account was created with Google Sign-In',
+        errors: {
+          email: 'Please use "Continue with Google" to login'
+        }
+      });
     }
 
     // Compare provided password with hashed password in database
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+      return res.status(401).json({ 
+        message: 'Invalid email or password',
+        errors: {
+          password: 'Incorrect password'
+        }
+      });
     }
 
     // Generate JWT token
@@ -105,7 +139,7 @@ exports.login = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error(error);
+    console.error('Login Error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -123,18 +157,33 @@ exports.googleSignIn = async (req, res) => {
     const decodedToken = await admin.auth().verifyIdToken(idToken);
     const { uid, email, name } = decodedToken;
 
-    // Check if user exists in database
+    // Normalize email
+    const normalizedEmail = email.toLowerCase();
+
+    // Check if user exists in database (by email OR googleId)
     let user = await User.findOne({
-      where: { [require('sequelize').Op.or]: [{ email }, { googleId: uid }] },
+      where: { 
+        [require('sequelize').Op.or]: [
+          { email: normalizedEmail }, 
+          { googleId: uid }
+        ] 
+      },
     });
 
-    // Create new user if first-time login
+    // If user exists but doesn't have googleId, update it
+    if (user && !user.googleId) {
+      user.googleId = uid;
+      await user.save();
+    }
+
+    // Create new user if first-time Google login
     if (!user) {
       user = await User.create({
         fullName: name || 'Google User',
-        email,
+        email: normalizedEmail,
         googleId: uid,
         role: 'user',
+        password: null, // No password for Google sign-in users
       });
     }
 
@@ -152,7 +201,7 @@ exports.googleSignIn = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error(error);
+    console.error('Google Sign-in Error:', error);
     res.status(500).json({ message: 'Google sign-in failed', error: error.message });
   }
 };
@@ -176,6 +225,7 @@ exports.getUserInfo = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error('Get User Info Error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
