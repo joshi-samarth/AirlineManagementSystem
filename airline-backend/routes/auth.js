@@ -12,5 +12,6 @@ router.post('/signup', authController.signup);
 router.post('/login', authController.login);
 router.post('/google-signin', authController.googleSignIn);
 router.get('/user-info', authMiddleware, authController.getUserInfo);
+router.put('/update-profile', authMiddleware, authController.updateProfile);
 
 module.exports = router;

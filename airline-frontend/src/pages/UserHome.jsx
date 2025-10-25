@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 export default function UserHome() {
-  const { user, logout } = useContext(AuthContext);
+  const { user, logout, updateUser } = useContext(AuthContext);
   const navigate = useNavigate();
   
   // State management
@@ -33,7 +33,7 @@ export default function UserHome() {
   const [updatedUser, setUpdatedUser] = useState(user);
 
   const apiUrl = import.meta.env.VITE_API_URL;
-  const token = localStorage.getItem('authToken');
+  const token = localStorage.getItem('token') || localStorage.getItem('authToken');
 
   // Fetch user bookings on mount
   useEffect(() => {
@@ -179,12 +179,33 @@ export default function UserHome() {
       setLoading(true);
       setError('');
       
-      // Update profile API call (you'll need to create this endpoint)
-      // For now, just update local state
-      setEditingProfile(false);
-      alert('Profile updated successfully');
+      // Update profile API call
+      const response = await axios.put(
+        `${apiUrl}/api/auth/update-profile`,
+        {
+          fullName: updatedUser?.fullName,
+          email: updatedUser?.email,
+          age: updatedUser?.age,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+
+      if (response.data.success) {
+        // Update the user in context with new data
+        const updatedUserData = response.data.user;
+        
+        // Update context and local state
+        updateUser(updatedUserData);
+        setUpdatedUser(updatedUserData);
+        setEditingProfile(false);
+        
+        alert('Profile updated successfully!');
+      }
     } catch (err) {
-      setError('Failed to update profile');
+      console.error('Profile update error:', err);
+      setError(err.response?.data?.message || 'Failed to update profile');
     } finally {
       setLoading(false);
     }

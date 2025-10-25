@@ -4,6 +4,7 @@ require('dotenv').config();
 const sequelize = require('./config/database');
 const authRoutes = require('./routes/auth');
 const flightRoutes = require('./routes/flights');
+const adminRoutes = require('./routes/admin');
 
 // Import models
 const User = require('./models/User');
@@ -31,6 +32,7 @@ Passenger.belongsTo(Booking, { foreignKey: 'bookingId' });
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/flights', flightRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Basic route
 app.get('/', (req, res) => {

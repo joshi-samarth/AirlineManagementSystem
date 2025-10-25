@@ -5,6 +5,13 @@ require('dotenv').config();
 const sequelize = require('./config/database');
 const Flight = require('./models/Flight');
 
+// Generate dynamic dates starting from tomorrow
+const getDateString = (daysFromNow) => {
+  const date = new Date();
+  date.setDate(date.getDate() + daysFromNow);
+  return date.toISOString().split('T')[0]; // YYYY-MM-DD format
+};
+
 const sampleFlights = [
   {
     flightNumber: 'AI101',
@@ -13,7 +20,7 @@ const sampleFlights = [
     arrivalCity: 'Delhi',
     departureTime: '08:00',
     arrivalTime: '10:15',
-    departureDate: '2025-11-15',
+    departureDate: getDateString(1), // Tomorrow
     price: 4500,
     totalSeats: 180,
     availableSeats: 45,
@@ -28,7 +35,7 @@ const sampleFlights = [
     arrivalCity: 'Delhi',
     departureTime: '11:30',
     arrivalTime: '13:45',
-    departureDate: '2025-11-15',
+    departureDate: getDateString(1), // Tomorrow
     price: 5200,
     totalSeats: 180,
     availableSeats: 32,
@@ -43,7 +50,7 @@ const sampleFlights = [
     arrivalCity: 'Delhi',
     departureTime: '15:15',
     arrivalTime: '17:30',
-    departureDate: '2025-11-15',
+    departureDate: getDateString(2), // Day after tomorrow
     price: 3800,
     totalSeats: 180,
     availableSeats: 28,
@@ -58,7 +65,7 @@ const sampleFlights = [
     arrivalCity: 'Delhi',
     departureTime: '18:45',
     arrivalTime: '21:00',
-    departureDate: '2025-11-15',
+    departureDate: getDateString(3), // 3 days from now
     price: 6100,
     totalSeats: 180,
     availableSeats: 50,
@@ -73,7 +80,7 @@ const sampleFlights = [
     arrivalCity: 'Bangalore',
     departureTime: '09:00',
     arrivalTime: '12:30',
-    departureDate: '2025-11-15',
+    departureDate: getDateString(1), // Tomorrow
     price: 5500,
     totalSeats: 180,
     availableSeats: 35,
@@ -88,7 +95,7 @@ const sampleFlights = [
     arrivalCity: 'Bangalore',
     departureTime: '14:00',
     arrivalTime: '17:30',
-    departureDate: '2025-11-15',
+    departureDate: getDateString(2), // Day after tomorrow
     price: 4900,
     totalSeats: 180,
     availableSeats: 42,
@@ -103,7 +110,7 @@ const sampleFlights = [
     arrivalCity: 'Chennai',
     departureTime: '08:30',
     arrivalTime: '10:00',
-    departureDate: '2025-11-15',
+    departureDate: getDateString(1), // Tomorrow
     price: 3200,
     totalSeats: 180,
     availableSeats: 55,
@@ -118,7 +125,7 @@ const sampleFlights = [
     arrivalCity: 'Chennai',
     departureTime: '16:00',
     arrivalTime: '17:30',
-    departureDate: '2025-11-15',
+    departureDate: getDateString(4), // 4 days from now
     price: 2900,
     totalSeats: 180,
     availableSeats: 60,
@@ -133,7 +140,7 @@ const sampleFlights = [
     arrivalCity: 'Bangalore',
     departureTime: '10:00',
     arrivalTime: '13:30',
-    departureDate: '2025-11-15',
+    departureDate: getDateString(2), // Day after tomorrow
     price: 5800,
     totalSeats: 180,
     availableSeats: 40,
@@ -148,7 +155,7 @@ const sampleFlights = [
     arrivalCity: 'Kolkata',
     departureTime: '07:30',
     arrivalTime: '10:00',
-    departureDate: '2025-11-15',
+    departureDate: getDateString(3), // 3 days from now
     price: 4100,
     totalSeats: 180,
     availableSeats: 48,

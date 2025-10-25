@@ -25,17 +25,33 @@ const generateToken = (user) => {
 // SIGNUP CONTROLLER
 exports.signup = async (req, res) => {
   try {
+    console.log('Signup request received:', req.body);
     const { fullName, email, age, password, confirmPassword } = req.body;
+
+    // Check if all required fields are present
+    if (!fullName || !email || !password || !confirmPassword) {
+      return res.status(400).json({ 
+        message: 'All fields are required',
+        errors: {
+          fullName: !fullName ? 'Full name is required' : '',
+          email: !email ? 'Email is required' : '',
+          password: !password ? 'Password is required' : '',
+          confirmPassword: !confirmPassword ? 'Confirm password is required' : ''
+        }
+      });
+    }
 
     // Validate all inputs
     const { isValid, errors } = validateSignup(fullName, email, age, password, confirmPassword);
     if (!isValid) {
+      console.log('Validation errors:', errors);
       return res.status(400).json({ message: 'Validation errors', errors });
     }
 
     // Check if email already exists (for ANY user - admin or regular user)
     const existingUser = await User.findOne({ where: { email: email.trim().toLowerCase() } });
     if (existingUser) {
+      console.log('Email already exists:', email);
       return res.status(400).json({ 
         message: 'Email already registered',
         errors: { 
@@ -47,31 +63,79 @@ exports.signup = async (req, res) => {
     // Hash password with bcrypt (10 salt rounds)
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user in database
-    const user = await User.create({
+    // Create user in database with detailed logging
+    console.log('Creating user with data:', {
       fullName,
-      email: email.trim().toLowerCase(), // Store email in lowercase for consistency
+      email: email.trim().toLowerCase(),
       age: parseInt(age),
+      role: 'user'
+    });
+
+    const user = await User.create({
+      fullName: fullName.trim(),
+      email: email.trim().toLowerCase(), // Store email in lowercase for consistency
+      age: age ? parseInt(age) : null,
       password: hashedPassword,
       role: 'user', // Default role is 'user'
     });
+
+    console.log('User created successfully:', user.id);
 
     // Generate JWT token
     const token = generateToken(user);
 
     res.status(201).json({
+      success: true,
       message: 'Signup successful',
       token,
       user: {
         id: user.id,
         fullName: user.fullName,
         email: user.email,
+        age: user.age,
         role: user.role,
       },
     });
   } catch (error) {
-    console.error('Signup Error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    console.error('Signup Error Details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
+    // Handle specific database errors
+    if (error.name === 'SequelizeValidationError') {
+      const validationErrors = {};
+      error.errors.forEach(err => {
+        validationErrors[err.path] = err.message;
+      });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Validation error', 
+        errors: validationErrors 
+      });
+    }
+    
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Email already registered',
+        errors: { email: 'This email is already in use' }
+      });
+    }
+    
+    if (error.name === 'SequelizeConnectionError') {
+      return res.status(500).json({ 
+        success: false,
+        message: 'Database connection error. Please check your database configuration.' 
+      });
+    }
+
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error during signup', 
+      error: error.message 
+    });
   }
 };
 
@@ -227,5 +291,71 @@ exports.getUserInfo = async (req, res) => {
   } catch (error) {
     console.error('Get User Info Error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// UPDATE USER PROFILE CONTROLLER
+exports.updateProfile = async (req, res) => {
+  try {
+    const { fullName, email, age } = req.body;
+    const userId = req.user.id;
+
+    // Find the current user
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'User not found' 
+      });
+    }
+
+    // Check if email is already taken by another user
+    if (email && email !== user.email) {
+      const existingUser = await User.findOne({ 
+        where: { 
+          email: email.toLowerCase(),
+          id: { [require('sequelize').Op.ne]: userId }
+        } 
+      });
+      
+      if (existingUser) {
+        return res.status(400).json({ 
+          success: false,
+          message: 'Email already taken by another user',
+          errors: { email: 'This email is already registered to another account' }
+        });
+      }
+    }
+
+    // Prepare update data
+    const updateData = {};
+    if (fullName && fullName.trim()) updateData.fullName = fullName.trim();
+    if (email && email.trim()) updateData.email = email.toLowerCase().trim();
+    if (age !== undefined && age !== null) updateData.age = parseInt(age);
+
+    // Update user
+    await user.update(updateData);
+
+    // Return updated user data
+    const updatedUser = await User.findByPk(userId);
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: {
+        id: updatedUser.id,
+        fullName: updatedUser.fullName,
+        email: updatedUser.email,
+        age: updatedUser.age,
+        role: updatedUser.role,
+      },
+    });
+  } catch (error) {
+    console.error('Update Profile Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error while updating profile', 
+      error: error.message 
+    });
   }
 };
