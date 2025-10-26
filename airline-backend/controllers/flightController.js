@@ -109,6 +109,11 @@ exports.createBooking = async (req, res) => {
     const { flightId, numberOfPassengers, passengers, specialRequests } = req.body;
     const userId = req.user.id;
 
+    console.log('=== CREATE BOOKING ===');
+    console.log('User ID:', userId);
+    console.log('Flight ID:', flightId);
+    console.log('Number of Passengers:', numberOfPassengers);
+
     // Validate required fields
     if (!flightId || !numberOfPassengers) {
       return res.status(400).json({ 
@@ -118,7 +123,7 @@ exports.createBooking = async (req, res) => {
     }
 
     // Validate passengers array
-    if (!passengers || !Array.isArray(passengers) || passengers.length !== numberOfPassengers) {
+    if (!passengers || !Array.isArray(passengers) || passengers.length !== parseInt(numberOfPassengers)) {
       return res.status(400).json({ 
         success: false,
         message: `Passenger details required for ${numberOfPassengers} passenger(s)` 
@@ -149,6 +154,8 @@ exports.createBooking = async (req, res) => {
       });
     }
 
+    console.log('Flight found:', flight.flightNumber);
+
     // Check seat availability
     if (flight.availableSeats < numberOfPassengers) {
       return res.status(400).json({ 
@@ -172,7 +179,10 @@ exports.createBooking = async (req, res) => {
       paymentStatus: 'completed',
       specialRequests,
       transactionId: 'TXN' + Date.now(),
+      bookingDate: new Date(),
     });
+
+    console.log('Booking created:', booking.id, booking.bookingReference);
 
     // Create passenger records
     for (let passenger of passengers) {
@@ -188,10 +198,14 @@ exports.createBooking = async (req, res) => {
       });
     }
 
+    console.log('Passengers created for booking:', booking.id);
+
     // Update available seats
     await flight.update({
       availableSeats: flight.availableSeats - numberOfPassengers,
     });
+
+    console.log('Flight seats updated. Remaining seats:', flight.availableSeats - numberOfPassengers);
 
     res.status(201).json({
       success: true,
@@ -213,25 +227,85 @@ exports.createBooking = async (req, res) => {
   }
 };
 
-// GET USER BOOKINGS
+// GET USER BOOKINGS - FIXED VERSION WITH RAW QUERY FALLBACK
 exports.getUserBookings = async (req, res) => {
   try {
     const userId = req.user.id;
+    
+    console.log('=== FETCHING BOOKINGS ===');
+    console.log('User ID:', userId);
 
-    const bookings = await Booking.findAll({
+    // Try with Sequelize ORM first
+    let bookings = await Booking.findAll({
       where: { userId },
       include: [
         {
           model: Flight,
-          attributes: ['flightNumber', 'airline', 'departureCity', 'arrivalCity', 'departureTime', 'arrivalTime', 'departureDate'],
+          as: 'Flight', // ✅ Explicitly specify the alias
+          required: false,
+          attributes: [
+            'id', 
+            'flightNumber', 
+            'airline', 
+            'departureCity', 
+            'arrivalCity', 
+            'departureTime', 
+            'arrivalTime', 
+            'departureDate', 
+            'price', 
+            'duration'
+          ],
         },
         {
           model: Passenger,
-          attributes: ['fullName', 'seatAssignment', 'mealPreference'],
+          as: 'Passengers', // ✅ Explicitly specify the alias
+          required: false,
+          attributes: [
+            'id', 
+            'fullName', 
+            'age', 
+            'gender', 
+            'seatAssignment', 
+            'mealPreference'
+          ],
         },
       ],
       order: [['bookingDate', 'DESC']],
     });
+
+    console.log(`Found ${bookings.length} bookings for user ${userId}`);
+    
+    // If no flight data is populated, manually fetch it
+    if (bookings.length > 0) {
+      const bookingsWithFlights = await Promise.all(
+        bookings.map(async (booking) => {
+          const bookingJSON = booking.toJSON();
+          
+          // If Flight is null or undefined, manually fetch it
+          if (!bookingJSON.Flight && bookingJSON.flightId) {
+            console.log(`Manually fetching flight ${bookingJSON.flightId} for booking ${bookingJSON.id}`);
+            const flight = await Flight.findByPk(bookingJSON.flightId);
+            if (flight) {
+              bookingJSON.Flight = flight.toJSON();
+            }
+          }
+          
+          // If Passengers array is empty, manually fetch them
+          if (!bookingJSON.Passengers || bookingJSON.Passengers.length === 0) {
+            console.log(`Manually fetching passengers for booking ${bookingJSON.id}`);
+            const passengers = await Passenger.findAll({
+              where: { bookingId: bookingJSON.id }
+            });
+            bookingJSON.Passengers = passengers.map(p => p.toJSON());
+          }
+          
+          return bookingJSON;
+        })
+      );
+      
+      bookings = bookingsWithFlights;
+      console.log('Sample booking with flight:', JSON.stringify(bookings[0], null, 2));
+    }
 
     res.json({
       success: true,
@@ -239,7 +313,10 @@ exports.getUserBookings = async (req, res) => {
       data: bookings,
     });
   } catch (error) {
-    console.error('Get User Bookings Error:', error);
+    console.error('=== GET USER BOOKINGS ERROR ===');
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    
     res.status(500).json({ 
       success: false,
       message: 'Error fetching bookings', 
@@ -253,6 +330,10 @@ exports.cancelBooking = async (req, res) => {
   try {
     const { bookingId } = req.params;
     const userId = req.user.id;
+
+    console.log('=== CANCEL BOOKING ===');
+    console.log('Booking ID:', bookingId);
+    console.log('User ID:', userId);
 
     // Find booking
     const booking = await Booking.findByPk(bookingId);
@@ -289,12 +370,15 @@ exports.cancelBooking = async (req, res) => {
       refundAmount,
     });
 
+    console.log('Booking cancelled:', booking.bookingReference);
+
     // Restore available seats in flight
     const flight = await Flight.findByPk(booking.flightId);
     if (flight) {
       await flight.update({
         availableSeats: flight.availableSeats + booking.numberOfPassengers,
       });
+      console.log('Seats restored. New available seats:', flight.availableSeats);
     }
 
     res.json({
@@ -325,10 +409,21 @@ exports.getBookingDetails = async (req, res) => {
       include: [
         {
           model: Flight,
-          attributes: ['flightNumber', 'airline', 'departureCity', 'arrivalCity', 'departureTime', 'arrivalTime', 'departureDate', 'price'],
+          as: 'Flight',
+          attributes: [
+            'flightNumber', 
+            'airline', 
+            'departureCity', 
+            'arrivalCity', 
+            'departureTime', 
+            'arrivalTime', 
+            'departureDate', 
+            'price'
+          ],
         },
         {
           model: Passenger,
+          as: 'Passengers',
         },
       ],
     });
@@ -399,3 +494,5 @@ exports.updateBooking = async (req, res) => {
     });
   }
 };
+
+module.exports = exports;
