@@ -61,9 +61,9 @@ export default function Signup() {
           error = 'Age is required';
         } else if (isNaN(value)) {
           error = 'Age must be a number';
-        } else if (value < 1) {
-          error = `Must be 0+ (currently ${value})`;
-        } else if (value > 150) {
+        } else if (value < 18) {
+          error = 'Must be 18 or older to sign up';
+        } else if (value > 120) {
           error = 'Please enter a valid age';
         }
         break;

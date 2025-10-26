@@ -52,9 +52,15 @@ export default function UserHome() {
           headers: { Authorization: `Bearer ${token}` }
         }
       );
-      setBookings(response.data.data || []);
+      if (response.data.success && response.data.data) {
+        setBookings(response.data.data || []);
+      } else {
+        setBookings([]);
+        setError('No bookings found');
+      }
     } catch (err) {
-      setError('Failed to fetch bookings');
+      setError(err.response?.data?.message || 'Failed to fetch bookings');
+      setBookings([]);
       console.error('Fetch bookings error:', err);
     } finally {
       setLoading(false);
@@ -110,7 +116,38 @@ export default function UserHome() {
     setPassengerDetails(updated);
   };
 
+  const validatePassengerDetails = () => {
+    const errors = [];
+    
+    passengerDetails.forEach((passenger, index) => {
+      if (!passenger.fullName || passenger.fullName.trim().length < 2) {
+        errors.push(`Passenger ${index + 1}: Full name is required (minimum 2 characters)`);
+      }
+      if (!passenger.age || isNaN(passenger.age) || passenger.age < 1 || passenger.age > 120) {
+        errors.push(`Passenger ${index + 1}: Valid age is required (1-120)`);
+      }
+      if (!passenger.gender || !['male', 'female', 'other'].includes(passenger.gender)) {
+        errors.push(`Passenger ${index + 1}: Gender selection is required`);
+      }
+      if (!passenger.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(passenger.email)) {
+        errors.push(`Passenger ${index + 1}: Valid email is required`);
+      }
+      if (!passenger.phoneNumber || passenger.phoneNumber.trim().length < 10) {
+        errors.push(`Passenger ${index + 1}: Valid phone number is required (minimum 10 digits)`);
+      }
+    });
+    
+    return errors;
+  };
+
   const confirmBooking = async () => {
+    // Validate all passenger details before submitting
+    const validationErrors = validatePassengerDetails();
+    if (validationErrors.length > 0) {
+      setError('Please fix the following errors:\n' + validationErrors.join('\n'));
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
@@ -595,12 +632,30 @@ export default function UserHome() {
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-2xl font-bold text-white">Passenger Details</h3>
                 <button
-                  onClick={() => setShowBookingModal(false)}
+                  onClick={() => {
+                    setShowBookingModal(false);
+                    setError('');
+                  }}
                   className="text-slate-400 hover:text-white"
                 >
                   ✕
                 </button>
               </div>
+
+              {/* Error Display in Modal */}
+              {error && (
+                <div className="mb-6 bg-red-500/20 border-l-4 border-red-500 rounded-r-lg p-4">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-red-400 mt-0.5 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                    <div>
+                      <p className="font-semibold text-red-400 text-sm">Validation Error</p>
+                      <p className="text-red-300 text-sm mt-1 whitespace-pre-line">{error}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-6 max-h-96 overflow-y-auto">
                 {passengerDetails.map((passenger, index) => (

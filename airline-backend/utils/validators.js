@@ -21,8 +21,8 @@ const validateSignup = (fullName, email, age, password, confirmPassword) => {
   if (!validateEmail(email)) {
     errors.email = 'Invalid email format';
   }
-  if (!age || age < 0 || age > 120) {
-    errors.age = 'Age must be between 1 and 120';
+  if (!age || age < 18 || age > 120) {
+    errors.age = 'Age must be 18 or older to sign up';
   }
   if (!validatePassword(password)) {
     errors.password = 'Password must have: 8+ chars, 1 uppercase, 1 number, 1 special char';

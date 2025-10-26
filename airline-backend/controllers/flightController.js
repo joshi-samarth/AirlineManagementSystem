@@ -75,11 +75,70 @@ exports.getFlightDetails = async (req, res) => {
   }
 };
 
+// Validate passenger data
+const validatePassenger = (passenger, index) => {
+  const errors = [];
+  
+  if (!passenger.fullName || passenger.fullName.trim().length < 2) {
+    errors.push(`Passenger ${index + 1}: Full name is required (minimum 2 characters)`);
+  }
+  
+  if (!passenger.age || isNaN(passenger.age) || passenger.age < 1 || passenger.age > 120) {
+    errors.push(`Passenger ${index + 1}: Valid age is required (1-120)`);
+  }
+  
+  if (!passenger.gender || !['male', 'female', 'other'].includes(passenger.gender)) {
+    errors.push(`Passenger ${index + 1}: Gender selection is required`);
+  }
+  
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!passenger.email || !emailRegex.test(passenger.email)) {
+    errors.push(`Passenger ${index + 1}: Valid email is required`);
+  }
+  
+  if (!passenger.phoneNumber || passenger.phoneNumber.trim().length < 10) {
+    errors.push(`Passenger ${index + 1}: Valid phone number is required (minimum 10 digits)`);
+  }
+  
+  return errors;
+};
+
 // CREATE BOOKING
 exports.createBooking = async (req, res) => {
   try {
     const { flightId, numberOfPassengers, passengers, specialRequests } = req.body;
     const userId = req.user.id;
+
+    // Validate required fields
+    if (!flightId || !numberOfPassengers) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Flight ID and number of passengers are required' 
+      });
+    }
+
+    // Validate passengers array
+    if (!passengers || !Array.isArray(passengers) || passengers.length !== numberOfPassengers) {
+      return res.status(400).json({ 
+        success: false,
+        message: `Passenger details required for ${numberOfPassengers} passenger(s)` 
+      });
+    }
+
+    // Validate all passenger details
+    const validationErrors = [];
+    passengers.forEach((passenger, index) => {
+      const errors = validatePassenger(passenger, index);
+      validationErrors.push(...errors);
+    });
+
+    if (validationErrors.length > 0) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Validation errors',
+        errors: validationErrors 
+      });
+    }
 
     // Validate flight exists
     const flight = await Flight.findByPk(flightId);
@@ -116,19 +175,17 @@ exports.createBooking = async (req, res) => {
     });
 
     // Create passenger records
-    if (passengers && Array.isArray(passengers)) {
-      for (let passenger of passengers) {
-        await Passenger.create({
-          bookingId: booking.id,
-          fullName: passenger.fullName,
-          age: passenger.age,
-          gender: passenger.gender,
-          email: passenger.email,
-          phoneNumber: passenger.phoneNumber,
-          mealPreference: passenger.mealPreference || 'none',
-          seatAssignment: generateSeatNumber(),
-        });
-      }
+    for (let passenger of passengers) {
+      await Passenger.create({
+        bookingId: booking.id,
+        fullName: passenger.fullName.trim(),
+        age: parseInt(passenger.age),
+        gender: passenger.gender,
+        email: passenger.email.trim().toLowerCase(),
+        phoneNumber: passenger.phoneNumber.trim(),
+        mealPreference: passenger.mealPreference || 'none',
+        seatAssignment: generateSeatNumber(),
+      });
     }
 
     // Update available seats

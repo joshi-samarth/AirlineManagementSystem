@@ -62,12 +62,17 @@ export default function AdminDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
+      setError('');
       const response = await axios.get(`${apiUrl}/api/admin/dashboard/overview`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setDashboardData(response.data.data);
+      if (response.data.success && response.data.data) {
+        setDashboardData(response.data.data);
+      } else {
+        setError('Failed to load dashboard data');
+      }
     } catch (err) {
-      setError('Failed to fetch dashboard data');
+      setError(err.response?.data?.message || 'Failed to fetch dashboard data');
       console.error(err);
     } finally {
       setLoading(false);
@@ -77,12 +82,19 @@ export default function AdminDashboard() {
   const fetchFlights = async () => {
     try {
       setLoading(true);
+      setError('');
       const response = await axios.get(`${apiUrl}/api/admin/flights/all`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setFlights(response.data.data || []);
+      if (response.data.success && response.data.data) {
+        setFlights(response.data.data || []);
+      } else {
+        setFlights([]);
+        setError('No flights found');
+      }
     } catch (err) {
-      setError('Failed to fetch flights');
+      setError(err.response?.data?.message || 'Failed to fetch flights');
+      setFlights([]);
       console.error(err);
     } finally {
       setLoading(false);
@@ -92,12 +104,19 @@ export default function AdminDashboard() {
   const fetchBookings = async () => {
     try {
       setLoading(true);
+      setError('');
       const response = await axios.get(`${apiUrl}/api/admin/bookings/all`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setBookings(response.data.data.bookings || []);
+      if (response.data.success && response.data.data) {
+        setBookings(response.data.data.bookings || []);
+      } else {
+        setBookings([]);
+        setError('No bookings found');
+      }
     } catch (err) {
-      setError('Failed to fetch bookings');
+      setError(err.response?.data?.message || 'Failed to fetch bookings');
+      setBookings([]);
       console.error(err);
     } finally {
       setLoading(false);
@@ -107,12 +126,19 @@ export default function AdminDashboard() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
+      setError('');
       const response = await axios.get(`${apiUrl}/api/admin/users/all`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setUsers(response.data.data.users || []);
+      if (response.data.success && response.data.data) {
+        setUsers(response.data.data.users || []);
+      } else {
+        setUsers([]);
+        setError('No users found');
+      }
     } catch (err) {
-      setError('Failed to fetch users');
+      setError(err.response?.data?.message || 'Failed to fetch users');
+      setUsers([]);
       console.error(err);
     } finally {
       setLoading(false);
