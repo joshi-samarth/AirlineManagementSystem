@@ -2,6 +2,8 @@ import React, { useState, useContext } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 
 export default function Signup() {
   const [formData, setFormData] = useState({
@@ -20,6 +22,41 @@ export default function Signup() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
+
+  // Firebase Configuration - Only initialize if credentials are provided
+  const firebaseApiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+  const firebaseAuthDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN;
+  const firebaseProjectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+  
+  // Check if Firebase is properly configured (not placeholder values)
+  const isFirebaseConfigured = firebaseApiKey && 
+                                firebaseAuthDomain && 
+                                firebaseProjectId &&
+                                firebaseApiKey !== 'your-firebase-api-key' &&
+                                firebaseAuthDomain !== 'your-project-id.firebaseapp.com' &&
+                                firebaseProjectId !== 'your-firebase-project-id';
+
+  let auth = null;
+  if (isFirebaseConfigured) {
+    try {
+      const firebaseConfig = {
+        apiKey: firebaseApiKey,
+        authDomain: firebaseAuthDomain,
+        projectId: firebaseProjectId,
+        storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+        appId: import.meta.env.VITE_FIREBASE_APP_ID,
+      };
+      const app = initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      console.log('✅ Firebase configured successfully');
+    } catch (error) {
+      console.warn('⚠️ Firebase initialization failed:', error.message);
+      auth = null;
+    }
+  } else {
+    console.log('ℹ️  Firebase not configured, Google Sign-In disabled');
+  }
 
   // Password requirements checker
   const getPasswordRequirements = (password) => {
@@ -79,7 +116,6 @@ export default function Signup() {
           if (!/[!@#$%^&*(),.?":{}|<>]/.test(value)) {
             missing.push('at least one special character');
           }
-
 
           if (missing.length > 0) {
             error = `Missing: ${missing.join(', ')}`;
@@ -181,6 +217,51 @@ export default function Signup() {
         setApiError(error.response.data.message);
       } else {
         setApiError('Signup failed. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Google Sign-Up
+  const handleGoogleSignUp = async () => {
+    setApiError('');
+    
+    // Check if Firebase is configured
+    if (!isFirebaseConfigured || !auth) {
+      setApiError('Google Sign-In is not configured. Please use email and password to sign up.');
+      return;
+    }
+
+    // Check if age is filled (required for signup)
+    if (!formData.age) {
+      setApiError('Please enter your age before signing up with Google.');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const idToken = await result.user.getIdToken();
+
+      const response = await axios.post(
+        `${import.meta.env.VITE_API_URL}/api/auth/google-signin`,
+        { 
+          idToken,
+          age: parseInt(formData.age)
+        }
+      );
+
+      login(response.data.token, response.data.user);
+      navigate(response.data.user.role === 'admin' ? '/admin/dashboard' : '/user/home');
+    } catch (error) {
+      if (error.response?.data?.message) {
+        setApiError(error.response.data.message);
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        setApiError('Google Sign-In was cancelled. Please try again if you want to continue.');
+      } else {
+        setApiError('Google Sign-In failed. Please use email and password instead.');
       }
     } finally {
       setLoading(false);
@@ -445,7 +526,7 @@ export default function Signup() {
                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 000 2h4a1 1 0 100-2H8z" clipRule="evenodd" />
                         )}
                       </svg>
-                      <span>Special Characters (@$!%*?&)</span>
+                      <span>Special (!@#$%^&*)</span>
                     </div>
                   </div>
                 </div>
@@ -529,10 +610,19 @@ export default function Signup() {
             <div className="flex-1 border-t border-gray-300"></div>
           </div>
 
-          {/* Google Sign-Up */}
+          {/* Firebase Not Configured Warning */}
+          {!isFirebaseConfigured && (
+            <div className="mb-4 bg-yellow-50 border-l-4 border-yellow-500 rounded-r-lg p-3">
+              <p className="text-yellow-800 text-xs">Google Sign-In is not configured. Please use email and password to sign up.</p>
+            </div>
+          )}
+
+          {/* Google Sign-Up Button */}
           <button
             type="button"
-            className="w-full py-3.5 px-6 rounded-xl border-2 border-gray-300 bg-white hover:bg-gray-50 hover:border-gray-400 font-semibold text-gray-700 transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center space-x-3 transform hover:scale-[1.02] active:scale-[0.98]"
+            onClick={handleGoogleSignUp}
+            disabled={loading || !isFirebaseConfigured}
+            className="w-full py-3.5 px-6 rounded-xl border-2 border-gray-300 bg-white hover:bg-gray-50 hover:border-gray-400 font-semibold text-gray-700 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100 flex items-center justify-center space-x-3 transform hover:scale-[1.02] active:scale-[0.98]"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -540,7 +630,7 @@ export default function Signup() {
               <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
             </svg>
-            <span>Sign up with Google</span>
+            {loading ? 'Signing up...' : 'Sign up with Google'}
           </button>
 
           {/* Login Link */}

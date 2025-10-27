@@ -228,7 +228,7 @@ exports.login = async (req, res) => {
   }
 };
 
-// GOOGLE SIGN-IN CONTROLLER
+// GOOGLE SIGN-IN CONTROLLER - UPDATED
 exports.googleSignIn = async (req, res) => {
   try {
     // Check if Firebase is initialized
@@ -239,7 +239,7 @@ exports.googleSignIn = async (req, res) => {
       });
     }
 
-    const { idToken } = req.body;
+    const { idToken, age } = req.body;
 
     if (!idToken) {
       return res.status(400).json({ message: 'ID token required' });
@@ -251,6 +251,16 @@ exports.googleSignIn = async (req, res) => {
 
     // Normalize email
     const normalizedEmail = email.toLowerCase();
+
+    // Validate age if provided
+    if (age) {
+      if (isNaN(age) || age < 18 || age > 120) {
+        return res.status(400).json({ 
+          message: 'Invalid age',
+          errors: { age: 'Age must be between 18 and 120' }
+        });
+      }
+    }
 
     // Check if user exists in database (by email OR googleId)
     let user = await User.findOne({
@@ -274,6 +284,7 @@ exports.googleSignIn = async (req, res) => {
         fullName: name || 'Google User',
         email: normalizedEmail,
         googleId: uid,
+        age: age ? parseInt(age) : null,
         role: 'user',
         password: null, // No password for Google sign-in users
       });
@@ -289,6 +300,7 @@ exports.googleSignIn = async (req, res) => {
         id: user.id,
         fullName: user.fullName,
         email: user.email,
+        age: user.age,
         role: user.role,
       },
     });
