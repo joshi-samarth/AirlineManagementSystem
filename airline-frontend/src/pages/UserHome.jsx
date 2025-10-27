@@ -37,6 +37,9 @@ export default function UserHome() {
 
   // Fetch user bookings on mount
   useEffect(() => {
+    // Clear any previous errors when switching tabs
+    setError('');
+    
     if (activeTab === 'bookings') {
       fetchUserBookings();
     }
@@ -52,11 +55,18 @@ export default function UserHome() {
           headers: { Authorization: `Bearer ${token}` }
         }
       );
-      if (response.data.success && response.data.data) {
-        setBookings(response.data.data || []);
+      if (response.data.success) {
+        const bookingsData = response.data.data || [];
+        setBookings(bookingsData);
+        
+        // Only show error if we expected bookings but got none
+        if (bookingsData.length === 0) {
+          // Clear error - empty state is handled by the UI
+          setError('');
+        }
       } else {
         setBookings([]);
-        setError('No bookings found');
+        setError('Failed to fetch bookings');
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch bookings');

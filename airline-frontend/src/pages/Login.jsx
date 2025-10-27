@@ -20,18 +20,40 @@ export default function Login() {
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
 
-  // Firebase Configuration
-  const firebaseConfig = {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'YOUR_FIREBASE_API_KEY',
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'YOUR_FIREBASE_AUTH_DOMAIN',
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'YOUR_FIREBASE_PROJECT_ID',
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'YOUR_FIREBASE_STORAGE_BUCKET',
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || 'YOUR_FIREBASE_MESSAGING_SENDER_ID',
-    appId: import.meta.env.VITE_FIREBASE_APP_ID || 'YOUR_FIREBASE_APP_ID',
-  };
+  // Firebase Configuration - Only initialize if credentials are provided
+  const firebaseApiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+  const firebaseAuthDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN;
+  const firebaseProjectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+  
+  // Check if Firebase is properly configured (not placeholder values)
+  const isFirebaseConfigured = firebaseApiKey && 
+                                firebaseAuthDomain && 
+                                firebaseProjectId &&
+                                firebaseApiKey !== 'your-firebase-api-key' &&
+                                firebaseAuthDomain !== 'your-project-id.firebaseapp.com' &&
+                                firebaseProjectId !== 'your-firebase-project-id';
 
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
+  let auth = null;
+  if (isFirebaseConfigured) {
+    try {
+      const firebaseConfig = {
+        apiKey: firebaseApiKey,
+        authDomain: firebaseAuthDomain,
+        projectId: firebaseProjectId,
+        storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+        appId: import.meta.env.VITE_FIREBASE_APP_ID,
+      };
+      const app = initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      console.log('✅ Firebase configured successfully');
+    } catch (error) {
+      console.warn('⚠️ Firebase initialization failed:', error.message);
+      auth = null;
+    }
+  } else {
+    console.log('ℹ️  Firebase not configured, Google Sign-In disabled');
+  }
 
   // Real-time validation
   const validateField = (name, value) => {
@@ -118,6 +140,13 @@ export default function Login() {
 
   const handleGoogleLogin = async () => {
     setApiError('');
+    
+    // Check if Firebase is configured
+    if (!isFirebaseConfigured || !auth) {
+      setApiError('Google Sign-In is not configured. Please use email and password to login.');
+      return;
+    }
+    
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
@@ -132,7 +161,13 @@ export default function Login() {
       login(response.data.token, response.data.user);
       navigate(response.data.user.role === 'admin' ? '/admin/dashboard' : '/user/home');
     } catch (error) {
-      setApiError(error.response?.data?.message || 'Google login failed. Please try again.');
+      if (error.response?.data?.message) {
+        setApiError(error.response.data.message);
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        setApiError('Google Sign-In was cancelled. Please try again if you want to continue.');
+      } else {
+        setApiError('Google Sign-In is not configured. Please use email and password to login.');
+      }
     } finally {
       setLoading(false);
     }
@@ -335,11 +370,16 @@ export default function Login() {
           </div>
 
           {/* Google Login */}
+          {!isFirebaseConfigured && (
+            <div className="mb-4 bg-yellow-50 border-l-4 border-yellow-500 rounded-r-lg p-3">
+              <p className="text-yellow-800 text-xs">Google Sign-In is not configured. Please use email and password to login.</p>
+            </div>
+          )}
           <button
             type="button"
             onClick={handleGoogleLogin}
-            disabled={loading}
-            className="w-full py-3.5 px-6 rounded-xl border-2 border-gray-300 bg-white hover:bg-gray-50 hover:border-gray-400 font-semibold text-gray-700 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3 transform hover:scale-[1.02] active:scale-[0.98]"
+            disabled={loading || !isFirebaseConfigured}
+            className="w-full py-3.5 px-6 rounded-xl border-2 border-gray-300 bg-white hover:bg-gray-50 hover:border-gray-400 font-semibold text-gray-700 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100 flex items-center justify-center space-x-3 transform hover:scale-[1.02] active:scale-[0.98]"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>

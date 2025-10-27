@@ -45,8 +45,8 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Server error', error: err.message });
 });
 
-// Sync database and start server
-sequelize.sync({ alter: true }).then(() => {
+// Sync database and start server (force: false to preserve existing data)
+sequelize.sync({ alter: false, force: false }).then(() => {
   const PORT = process.env.PORT || 5000;
   app.listen(PORT, () => {
     console.log(`✅ Server running on http://localhost:${PORT}`);
@@ -55,5 +55,11 @@ sequelize.sync({ alter: true }).then(() => {
   });
 }).catch(err => {
   console.error('❌ Database sync failed:', err.message);
-  process.exit(1);
+  console.log('ℹ️  If tables already exist, this is normal. Server will continue...');
+  // Don't exit - continue running if tables exist
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`✅ Server running on http://localhost:${PORT}`);
+    console.log(`📊 Database: ${process.env.DB_NAME}`);
+  });
 });

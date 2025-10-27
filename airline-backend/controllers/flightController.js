@@ -232,9 +232,23 @@ exports.getUserBookings = async (req, res) => {
   try {
     const userId = req.user.id;
     
-    console.log('=== FETCHING BOOKINGS ===');
-    console.log('User ID:', userId);
+    console.log('\n=== FETCHING BOOKINGS ===');
+    console.log('User ID from token:', userId);
+    console.log('User email:', req.user.email);
+    
+    // First, check if user exists
+    const user = await User.findByPk(userId);
+    console.log('User found:', user ? user.email : 'NOT FOUND');
 
+    // First, let's check all bookings for this user (including those without proper Flight relation)
+    const allBookingsForUser = await Booking.findAll({
+      where: { userId },
+      raw: true
+    });
+    
+    console.log(`Found ${allBookingsForUser.length} bookings for userId ${userId} in database`);
+    console.log('Booking IDs:', allBookingsForUser.map(b => b.id).join(', '));
+    
     // Try with Sequelize ORM first
     let bookings = await Booking.findAll({
       where: { userId },
@@ -273,7 +287,7 @@ exports.getUserBookings = async (req, res) => {
       order: [['bookingDate', 'DESC']],
     });
 
-    console.log(`Found ${bookings.length} bookings for user ${userId}`);
+    console.log(`Sequelize found ${bookings.length} bookings with relations`);
     
     // If no flight data is populated, manually fetch it
     if (bookings.length > 0) {

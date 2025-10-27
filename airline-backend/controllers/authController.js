@@ -4,14 +4,34 @@ const jwt = require('jsonwebtoken');
 const { validateSignup } = require('../utils/validators');
 const admin = require('firebase-admin');
 
-// Initialize Firebase Admin
-admin.initializeApp({
-  credential: admin.credential.cert({
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-  }),
-});
+// Initialize Firebase Admin (only if credentials are provided)
+let firebaseInitialized = false;
+const firebaseProjectId = process.env.FIREBASE_PROJECT_ID;
+const firebasePrivateKey = process.env.FIREBASE_PRIVATE_KEY;
+const firebaseClientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+
+// Only initialize Firebase if valid credentials are provided (not placeholder values)
+if (firebaseProjectId && firebasePrivateKey && firebaseClientEmail && 
+    firebaseProjectId !== 'your-firebase-project-id' && 
+    firebasePrivateKey !== '"-----BEGIN PRIVATE KEY-----\\nYOUR_PRIVATE_KEY_HERE\\n-----END PRIVATE KEY-----\\n"' &&
+    firebaseClientEmail !== 'your-service-account-email@your-project-id.iam.gserviceaccount.com') {
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: firebaseProjectId,
+        privateKey: firebasePrivateKey.replace(/\\n/g, '\n'),
+        clientEmail: firebaseClientEmail,
+      }),
+    });
+    firebaseInitialized = true;
+    console.log('✅ Firebase Admin initialized successfully');
+  } catch (error) {
+    console.warn('⚠️  Firebase Admin initialization failed, Google Sign-In will be disabled:', error.message);
+    firebaseInitialized = false;
+  }
+} else {
+  console.log('ℹ️  Firebase credentials not configured, Google Sign-In will be disabled');
+}
 
 // Generate JWT token
 const generateToken = (user) => {
@@ -211,6 +231,14 @@ exports.login = async (req, res) => {
 // GOOGLE SIGN-IN CONTROLLER
 exports.googleSignIn = async (req, res) => {
   try {
+    // Check if Firebase is initialized
+    if (!firebaseInitialized) {
+      return res.status(503).json({ 
+        message: 'Google Sign-In is not configured',
+        error: 'Firebase credentials are missing or invalid. Please configure Firebase in .env file to use Google Sign-In.'
+      });
+    }
+
     const { idToken } = req.body;
 
     if (!idToken) {
