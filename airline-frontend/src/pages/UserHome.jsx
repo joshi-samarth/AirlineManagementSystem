@@ -1,3 +1,4 @@
+// src/pages/UserHome.jsx - Professional Minimalist Redesign
 import React, { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -35,11 +36,8 @@ export default function UserHome() {
   const apiUrl = import.meta.env.VITE_API_URL;
   const token = localStorage.getItem('token') || localStorage.getItem('authToken');
 
-  // Fetch user bookings on mount
   useEffect(() => {
-    // Clear any previous errors when switching tabs
     setError('');
-    
     if (activeTab === 'bookings') {
       fetchUserBookings();
     }
@@ -51,27 +49,14 @@ export default function UserHome() {
       setError('');
       const response = await axios.get(
         `${apiUrl}/api/flights/my-bookings`,
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       if (response.data.success) {
-        const bookingsData = response.data.data || [];
-        setBookings(bookingsData);
-        
-        // Only show error if we expected bookings but got none
-        if (bookingsData.length === 0) {
-          // Clear error - empty state is handled by the UI
-          setError('');
-        }
-      } else {
-        setBookings([]);
-        setError('Failed to fetch bookings');
+        setBookings(response.data.data || []);
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch bookings');
       setBookings([]);
-      console.error('Fetch bookings error:', err);
     } finally {
       setLoading(false);
     }
@@ -89,19 +74,13 @@ export default function UserHome() {
       setError('');
       
       const response = await axios.get(`${apiUrl}/api/flights/search`, {
-        params: {
-          departureCity: searchParams.departureCity,
-          arrivalCity: searchParams.arrivalCity,
-          departureDate: searchParams.departureDate,
-          passengers: searchParams.passengers,
-        }
+        params: searchParams
       });
       
       setSearchResults(response.data.data || []);
       setShowResults(true);
     } catch (err) {
       setError('Failed to search flights');
-      console.error('Search error:', err);
     } finally {
       setLoading(false);
     }
@@ -126,91 +105,46 @@ export default function UserHome() {
     setPassengerDetails(updated);
   };
 
-  const validatePassengerDetails = () => {
-    const errors = [];
-    
-    passengerDetails.forEach((passenger, index) => {
-      if (!passenger.fullName || passenger.fullName.trim().length < 2) {
-        errors.push(`Passenger ${index + 1}: Full name is required (minimum 2 characters)`);
-      }
-      if (!passenger.age || isNaN(passenger.age) || passenger.age < 1 || passenger.age > 120) {
-        errors.push(`Passenger ${index + 1}: Valid age is required (1-120)`);
-      }
-      if (!passenger.gender || !['male', 'female', 'other'].includes(passenger.gender)) {
-        errors.push(`Passenger ${index + 1}: Gender selection is required`);
-      }
-      if (!passenger.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(passenger.email)) {
-        errors.push(`Passenger ${index + 1}: Valid email is required`);
-      }
-      if (!passenger.phoneNumber || passenger.phoneNumber.trim().length < 10) {
-        errors.push(`Passenger ${index + 1}: Valid phone number is required (minimum 10 digits)`);
-      }
-    });
-    
-    return errors;
-  };
-
   const confirmBooking = async () => {
-    // Validate all passenger details before submitting
-    const validationErrors = validatePassengerDetails();
-    if (validationErrors.length > 0) {
-      setError('Please fix the following errors:\n' + validationErrors.join('\n'));
-      return;
-    }
-
     try {
       setLoading(true);
       setError('');
 
-      const bookingData = {
-        flightId: selectedFlight.id,
-        numberOfPassengers: searchParams.passengers,
-        passengers: passengerDetails,
-      };
-
       const response = await axios.post(
         `${apiUrl}/api/flights/book`,
-        bookingData,
         {
-          headers: { Authorization: `Bearer ${token}` }
-        }
+          flightId: selectedFlight.id,
+          numberOfPassengers: searchParams.passengers,
+          passengers: passengerDetails,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      alert('Booking confirmed! Booking Reference: ' + response.data.data.bookingReference);
-      setSelectedFlight(null);
+      alert('Booking confirmed! Reference: ' + response.data.data.bookingReference);
       setShowBookingModal(false);
       setShowResults(false);
       setActiveTab('bookings');
       fetchUserBookings();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to create booking');
-      console.error('Booking error:', err);
     } finally {
       setLoading(false);
     }
   };
 
   const handleCancelBooking = async (bookingId) => {
-    if (!window.confirm('Are you sure you want to cancel this booking? You will receive 80% refund.')) {
-      return;
-    }
+    if (!window.confirm('Cancel this booking? You will receive 80% refund.')) return;
 
     try {
       setLoading(true);
-      setError('');
-
       await axios.delete(
         `${apiUrl}/api/flights/cancel/${bookingId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
-
       alert('Booking cancelled successfully');
       fetchUserBookings();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to cancel booking');
-      console.error('Cancel error:', err);
     } finally {
       setLoading(false);
     }
@@ -224,9 +158,6 @@ export default function UserHome() {
   const handleProfileUpdate = async () => {
     try {
       setLoading(true);
-      setError('');
-      
-      // Update profile API call
       const response = await axios.put(
         `${apiUrl}/api/auth/update-profile`,
         {
@@ -234,24 +165,16 @@ export default function UserHome() {
           email: updatedUser?.email,
           age: updatedUser?.age,
         },
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
       if (response.data.success) {
-        // Update the user in context with new data
-        const updatedUserData = response.data.user;
-        
-        // Update context and local state
-        updateUser(updatedUserData);
-        setUpdatedUser(updatedUserData);
+        updateUser(response.data.user);
+        setUpdatedUser(response.data.user);
         setEditingProfile(false);
-        
         alert('Profile updated successfully!');
       }
     } catch (err) {
-      console.error('Profile update error:', err);
       setError(err.response?.data?.message || 'Failed to update profile');
     } finally {
       setLoading(false);
@@ -259,69 +182,107 @@ export default function UserHome() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 shadow-lg">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <h1 className="text-3xl font-bold">SkyBook Airlines</h1>
-          </div>
-          <div className="flex items-center space-x-4">
-            <div className="text-sm">
-              <p className="text-blue-100">Welcome</p>
-              <p className="font-semibold">{user?.fullName}</p>
+    <div className="min-h-screen bg-slate-50">
+      {/* Navigation Bar */}
+      <nav className="bg-white border-b border-slate-200 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            {/* Left: Logo + Brand */}
+            <div className="flex items-center space-x-3">
+              <div className="flex items-center justify-center w-10 h-10 bg-blue-600 rounded-lg">
+                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+                </svg>
+              </div>
+              <span className="text-xl font-bold text-slate-900">SkyBook</span>
             </div>
-            <button
-              onClick={handleLogout}
-              className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg transition"
-            >
-              Logout
-            </button>
+
+            {/* Center: Navigation Links */}
+            <div className="hidden md:flex space-x-1">
+              {[
+                { id: 'search', label: 'Search Flights', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
+                { id: 'bookings', label: 'My Bookings', icon: 'M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z' },
+                { id: 'profile', label: 'My Profile', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                    activeTab === tab.id
+                      ? 'bg-blue-50 text-blue-600'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Right: User Menu */}
+            <div className="flex items-center space-x-3">
+              <div className="hidden sm:flex items-center space-x-2 bg-slate-100 px-3 py-2 rounded-lg">
+                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                  {user?.fullName?.charAt(0).toUpperCase()}
+                </div>
+                <span className="text-sm font-medium text-slate-900">{user?.fullName}</span>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-4 py-2 rounded-lg transition-colors text-sm"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile Navigation */}
+          <div className="md:hidden pb-3 flex space-x-2 overflow-x-auto">
+            {[
+              { id: 'search', label: 'Search' },
+              { id: 'bookings', label: 'Bookings' },
+              { id: 'profile', label: 'Profile' },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
-      </div>
+      </nav>
 
-      <div className="max-w-7xl mx-auto p-6 space-y-6">
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Error Alert */}
         {error && (
-          <div className="bg-red-500 text-white p-4 rounded-lg mb-4">
-            {error}
+          <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
+            <p className="text-sm text-red-800">{error}</p>
           </div>
         )}
-
-        {/* Navigation Tabs */}
-        <div className="flex space-x-4 border-b border-slate-700">
-          {['search', 'bookings', 'profile'].map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-6 py-3 font-semibold transition-colors ${
-                activeTab === tab
-                  ? 'border-b-2 border-blue-500 text-blue-400'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              {tab === 'search' && '✈️ Search Flights'}
-              {tab === 'bookings' && '🎫 My Bookings'}
-              {tab === 'profile' && '👤 My Profile'}
-            </button>
-          ))}
-        </div>
 
         {/* Search Flights Tab */}
         {activeTab === 'search' && (
           <div className="space-y-6">
-            <div className="bg-slate-800 rounded-lg p-8 border border-slate-700">
-              <h2 className="text-2xl font-bold text-white mb-6">Search Flights</h2>
-              <div className="space-y-6">
+            {/* Search Card */}
+            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+              <h2 className="text-xl font-bold text-slate-900 mb-6">Search Flights</h2>
+              <form onSubmit={handleSearch}>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                   <div>
-                    <label className="block text-sm text-slate-300 mb-2">From</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">From</label>
                     <select
                       name="departureCity"
                       value={searchParams.departureCity}
                       onChange={handleSearchChange}
-                      className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 focus:border-blue-500 outline-none"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-4 focus:ring-blue-200"
+                      required
                     >
                       <option value="">Select city</option>
                       <option value="Mumbai">Mumbai</option>
@@ -333,12 +294,13 @@ export default function UserHome() {
                   </div>
 
                   <div>
-                    <label className="block text-sm text-slate-300 mb-2">To</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">To</label>
                     <select
                       name="arrivalCity"
                       value={searchParams.arrivalCity}
                       onChange={handleSearchChange}
-                      className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 focus:border-blue-500 outline-none"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-4 focus:ring-blue-200"
+                      required
                     >
                       <option value="">Select city</option>
                       <option value="Mumbai">Mumbai</option>
@@ -350,18 +312,19 @@ export default function UserHome() {
                   </div>
 
                   <div>
-                    <label className="block text-sm text-slate-300 mb-2">Departure Date</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Date</label>
                     <input
                       type="date"
                       name="departureDate"
                       value={searchParams.departureDate}
                       onChange={handleSearchChange}
-                      className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 focus:border-blue-500 outline-none"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-4 focus:ring-blue-200"
+                      required
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm text-slate-300 mb-2">Passengers</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Passengers</label>
                     <input
                       type="number"
                       name="passengers"
@@ -369,84 +332,72 @@ export default function UserHome() {
                       max="9"
                       value={searchParams.passengers}
                       onChange={handleSearchChange}
-                      className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 focus:border-blue-500 outline-none"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-4 focus:ring-blue-200"
                     />
                   </div>
 
                   <div className="flex items-end">
                     <button
-                      onClick={handleSearch}
+                      type="submit"
                       disabled={loading}
-                      className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 text-white font-semibold px-6 py-2 rounded-lg transition"
+                      className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
                     >
                       {loading ? 'Searching...' : 'Search'}
                     </button>
                   </div>
                 </div>
-              </div>
+              </form>
             </div>
 
             {/* Search Results */}
             {showResults && (
               <div className="space-y-4">
-                <h3 className="text-xl font-bold text-white">
-                  Available Flights: {searchParams.departureCity} to {searchParams.arrivalCity}
+                <h3 className="text-lg font-semibold text-slate-900">
+                  Available Flights ({searchResults.length})
                 </h3>
                 {searchResults.length === 0 ? (
-                  <div className="bg-slate-800 rounded-lg p-8 text-center border border-slate-700">
-                    <p className="text-slate-400 text-lg">No flights available for selected criteria</p>
+                  <div className="bg-white rounded-lg border border-slate-200 p-12 text-center">
+                    <p className="text-slate-500">No flights found</p>
                   </div>
                 ) : (
                   searchResults.map(flight => (
-                    <div key={flight.id} className="bg-slate-800 rounded-lg p-6 border border-slate-700 hover:border-blue-500 transition">
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                        <div>
-                          <p className="text-slate-400 text-sm">Airline</p>
-                          <p className="text-white font-semibold">{flight.airline}</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-400 text-sm">Flight</p>
-                          <p className="text-white font-semibold">{flight.flightNumber}</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-400 text-sm">Duration</p>
-                          <p className="text-white font-semibold">{flight.duration}</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-400 text-sm">Available Seats</p>
-                          <p className="text-white font-semibold">{flight.availableSeats}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between bg-slate-700 p-4 rounded-lg mb-4">
-                        <div className="text-center flex-1">
-                          <p className="text-2xl font-bold text-white">{flight.departureTime}</p>
-                          <p className="text-slate-400 text-sm">{flight.departureCity}</p>
-                        </div>
-                        <div className="flex-1 text-center px-4">
-                          <div className="border-t-2 border-slate-600 py-2">
-                            <p className="text-slate-400">✈️</p>
+                    <div key={flight.id} className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 hover:border-blue-300 transition-colors">
+                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                        {/* Flight Info */}
+                        <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6">
+                          <div className="text-center">
+                            <p className="text-2xl font-bold text-slate-900">{flight.departureTime}</p>
+                            <p className="text-sm text-slate-600">{flight.departureCity}</p>
                           </div>
-                          <p className="text-slate-500 text-xs mt-1">{flight.duration}</p>
+                          <div className="text-center">
+                            <div className="flex items-center justify-center">
+                              <div className="h-px bg-slate-300 flex-1"></div>
+                              <svg className="w-5 h-5 text-slate-400 mx-2" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+                              </svg>
+                              <div className="h-px bg-slate-300 flex-1"></div>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-1">{flight.duration}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-2xl font-bold text-slate-900">{flight.arrivalTime}</p>
+                            <p className="text-sm text-slate-600">{flight.arrivalCity}</p>
+                          </div>
                         </div>
-                        <div className="text-center flex-1">
-                          <p className="text-2xl font-bold text-white">{flight.arrivalTime}</p>
-                          <p className="text-slate-400 text-sm">{flight.arrivalCity}</p>
-                        </div>
-                      </div>
 
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-slate-400 text-sm">Price per passenger</p>
-                          <p className="text-3xl font-bold text-blue-400">₹{parseFloat(flight.price).toLocaleString('en-IN')}</p>
+                        {/* Price & Book */}
+                        <div className="text-center lg:text-right">
+                          <p className="text-sm text-slate-600 mb-1">{flight.airline}</p>
+                          <p className="text-2xl font-bold text-blue-600 mb-3">₹{parseFloat(flight.price).toLocaleString('en-IN')}</p>
+                          <button
+                            onClick={() => handleBookFlight(flight)}
+                            disabled={flight.availableSeats < searchParams.passengers}
+                            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-6 py-2 rounded-lg transition-colors text-sm"
+                          >
+                            {flight.availableSeats < searchParams.passengers ? 'Sold Out' : 'Book Now'}
+                          </button>
+                          <p className="text-xs text-slate-500 mt-2">{flight.availableSeats} seats left</p>
                         </div>
-                        <button
-                          onClick={() => handleBookFlight(flight)}
-                          disabled={loading || flight.availableSeats < searchParams.passengers}
-                          className="bg-green-500 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-8 py-3 rounded-lg transition font-semibold"
-                        >
-                          {flight.availableSeats < searchParams.passengers ? 'Not Available' : 'Book Now'}
-                        </button>
                       </div>
                     </div>
                   ))
@@ -459,89 +410,51 @@ export default function UserHome() {
         {/* My Bookings Tab */}
         {activeTab === 'bookings' && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-white">My Bookings</h2>
+            <h2 className="text-xl font-bold text-slate-900">My Bookings</h2>
             {loading ? (
-              <div className="text-center text-slate-400">Loading bookings...</div>
+              <div className="text-center py-12 text-slate-500">Loading...</div>
             ) : bookings.length === 0 ? (
-              <div className="bg-slate-800 rounded-lg p-12 text-center border border-slate-700">
-                <p className="text-slate-400 text-lg">No bookings yet</p>
+              <div className="bg-white rounded-lg border border-slate-200 p-12 text-center">
+                <p className="text-slate-500">No bookings yet</p>
               </div>
             ) : (
               bookings.map(booking => (
-                <div key={booking.id} className={`bg-slate-800 rounded-lg p-6 border-l-4 ${
-                  booking.bookingStatus === 'confirmed' ? 'border-l-green-500' : 'border-l-red-500'
-                }`}>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-4">
-                    <div>
-                      <p className="text-slate-400 text-sm">Booking Ref</p>
-                      <p className="text-white font-semibold">{booking.bookingReference}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-400 text-sm">Flight</p>
-                      <p className="text-white font-semibold">{booking.Flight?.flightNumber}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-400 text-sm">Status</p>
-                      <p className={`font-semibold capitalize ${booking.bookingStatus === 'confirmed' ? 'text-green-400' : 'text-red-400'}`}>
-                        {booking.bookingStatus}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-slate-400 text-sm">Amount</p>
-                      <p className="text-blue-400 font-semibold">₹{parseFloat(booking.totalPrice).toLocaleString('en-IN')}</p>
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-700 p-4 rounded-lg mb-4">
-                    <div className="flex items-center justify-between">
-                      <div className="text-center flex-1">
-                        <p className="text-xl font-bold text-white">{booking.Flight?.departureTime}</p>
-                        <p className="text-slate-400 text-sm">{booking.Flight?.departureCity}</p>
+                <div key={booking.id} className="bg-white rounded-lg shadow-sm border-l-4 border-l-green-500 p-6">
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-xs text-slate-500 mb-1">Booking Ref</p>
+                        <p className="font-semibold text-slate-900">{booking.bookingReference}</p>
                       </div>
-                      <div className="flex-1 text-center px-4">
-                        <p className="text-slate-400">✈️</p>
+                      <div>
+                        <p className="text-xs text-slate-500 mb-1">Flight</p>
+                        <p className="font-semibold text-slate-900">{booking.Flight?.flightNumber}</p>
                       </div>
-                      <div className="text-center flex-1">
-                        <p className="text-xl font-bold text-white">{booking.Flight?.arrivalTime}</p>
-                        <p className="text-slate-400 text-sm">{booking.Flight?.arrivalCity}</p>
+                      <div>
+                        <p className="text-xs text-slate-500 mb-1">Route</p>
+                        <p className="font-semibold text-slate-900">{booking.Flight?.departureCity} → {booking.Flight?.arrivalCity}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 mb-1">Status</p>
+                        <span className={`inline-block px-2 py-1 text-xs font-semibold rounded ${
+                          booking.bookingStatus === 'confirmed' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {booking.bookingStatus}
+                        </span>
                       </div>
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
-                    <div>
-                      <p className="text-slate-400 text-sm">Date</p>
-                      <p className="text-white">{booking.Flight?.departureDate}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-400 text-sm">Passengers</p>
-                      <p className="text-white">{booking.numberOfPassengers}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-400 text-sm">Payment</p>
-                      <p className={`font-semibold ${booking.paymentStatus === 'completed' ? 'text-green-400' : 'text-yellow-400'}`}>
-                        {booking.paymentStatus}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-slate-400 text-sm">Booked On</p>
-                      <p className="text-white">{new Date(booking.bookingDate).toLocaleDateString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-400 text-sm">Airline</p>
-                      <p className="text-white font-semibold">{booking.Flight?.airline}</p>
+                    <div className="text-right">
+                      <p className="text-xl font-bold text-blue-600 mb-2">₹{parseFloat(booking.totalPrice).toLocaleString('en-IN')}</p>
+                      {booking.bookingStatus === 'confirmed' && (
+                        <button
+                          onClick={() => handleCancelBooking(booking.id)}
+                          className="bg-red-500 hover:bg-red-600 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      )}
                     </div>
                   </div>
-
-                  {booking.bookingStatus === 'confirmed' && (
-                    <button
-                      onClick={() => handleCancelBooking(booking.id)}
-                      disabled={loading}
-                      className="w-full bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white px-6 py-2 rounded-lg transition font-semibold"
-                    >
-                      {loading ? 'Cancelling...' : 'Cancel Booking'}
-                    </button>
-                  )}
                 </div>
               ))
             )}
@@ -550,70 +463,70 @@ export default function UserHome() {
 
         {/* My Profile Tab */}
         {activeTab === 'profile' && (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-white">My Profile</h2>
-            <div className="bg-slate-800 rounded-lg p-8 border border-slate-700">
+          <div className="max-w-2xl">
+            <h2 className="text-xl font-bold text-slate-900 mb-6">My Profile</h2>
+            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
               {!editingProfile ? (
                 <div className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <p className="text-slate-400 text-sm mb-2">Full Name</p>
-                      <p className="text-white text-lg font-semibold">{user?.fullName}</p>
+                      <p className="text-sm text-slate-500 mb-1">Full Name</p>
+                      <p className="text-lg font-semibold text-slate-900">{user?.fullName}</p>
                     </div>
                     <div>
-                      <p className="text-slate-400 text-sm mb-2">Email</p>
-                      <p className="text-white text-lg font-semibold">{user?.email}</p>
+                      <p className="text-sm text-slate-500 mb-1">Email</p>
+                      <p className="text-lg font-semibold text-slate-900">{user?.email}</p>
                     </div>
                     <div>
-                      <p className="text-slate-400 text-sm mb-2">Age</p>
-                      <p className="text-white text-lg font-semibold">{user?.age} years</p>
+                      <p className="text-sm text-slate-500 mb-1">Age</p>
+                      <p className="text-lg font-semibold text-slate-900">{user?.age} years</p>
                     </div>
                     <div>
-                      <p className="text-slate-400 text-sm mb-2">Account Type</p>
-                      <p className="text-white text-lg font-semibold capitalize">{user?.role}</p>
+                      <p className="text-sm text-slate-500 mb-1">Account Type</p>
+                      <p className="text-lg font-semibold text-slate-900 capitalize">{user?.role}</p>
                     </div>
                   </div>
                   <button
                     onClick={() => setEditingProfile(true)}
-                    className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg transition font-semibold"
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors"
                   >
                     Edit Profile
                   </button>
                 </div>
               ) : (
-                <div className="space-y-6">
+                <div className="space-y-5">
                   <div>
-                    <label className="block text-slate-300 text-sm mb-2">Full Name</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Full Name</label>
                     <input
                       type="text"
                       value={updatedUser?.fullName || ''}
                       onChange={(e) => setUpdatedUser({ ...updatedUser, fullName: e.target.value })}
-                      className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 focus:border-blue-500 outline-none"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-4 focus:ring-blue-200"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-300 text-sm mb-2">Email</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Email</label>
                     <input
                       type="email"
                       value={updatedUser?.email || ''}
                       onChange={(e) => setUpdatedUser({ ...updatedUser, email: e.target.value })}
-                      className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 focus:border-blue-500 outline-none"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-4 focus:ring-blue-200"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-300 text-sm mb-2">Age</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Age</label>
                     <input
                       type="number"
                       value={updatedUser?.age || ''}
                       onChange={(e) => setUpdatedUser({ ...updatedUser, age: parseInt(e.target.value) })}
-                      className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 focus:border-blue-500 outline-none"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-4 focus:ring-blue-200"
                     />
                   </div>
-                  <div className="flex space-x-4">
+                  <div className="flex space-x-3">
                     <button
                       onClick={handleProfileUpdate}
                       disabled={loading}
-                      className="flex-1 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white px-6 py-2 rounded-lg transition font-semibold"
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold px-6 py-2 rounded-lg transition-colors"
                     >
                       Save Changes
                     </button>
@@ -622,7 +535,7 @@ export default function UserHome() {
                         setEditingProfile(false);
                         setUpdatedUser(user);
                       }}
-                      className="flex-1 bg-slate-600 hover:bg-slate-700 text-white px-6 py-2 rounded-lg transition font-semibold"
+                      className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold px-6 py-2 rounded-lg transition-colors"
                     >
                       Cancel
                     </button>
@@ -637,134 +550,100 @@ export default function UserHome() {
       {/* Booking Modal */}
       {showBookingModal && selectedFlight && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-slate-800 rounded-lg max-w-2xl w-full border border-slate-700 my-8">
-            <div className="p-8">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-2xl font-bold text-white">Passenger Details</h3>
+          <div className="bg-white rounded-lg max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-slate-900">Passenger Details</h3>
                 <button
-                  onClick={() => {
-                    setShowBookingModal(false);
-                    setError('');
-                  }}
-                  className="text-slate-400 hover:text-white"
+                  onClick={() => setShowBookingModal(false)}
+                  className="text-slate-400 hover:text-slate-600"
                 >
-                  ✕
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
+                  </svg>
                 </button>
               </div>
+            </div>
 
-              {/* Error Display in Modal */}
-              {error && (
-                <div className="mb-6 bg-red-500/20 border-l-4 border-red-500 rounded-r-lg p-4">
-                  <div className="flex items-start">
-                    <svg className="w-5 h-5 text-red-400 mt-0.5 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                    </svg>
-                    <div>
-                      <p className="font-semibold text-red-400 text-sm">Validation Error</p>
-                      <p className="text-red-300 text-sm mt-1 whitespace-pre-line">{error}</p>
-                    </div>
+            <div className="p-6 space-y-4">
+              {passengerDetails.map((passenger, index) => (
+                <div key={index} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                  <p className="font-semibold text-slate-900 mb-3">Passenger {index + 1}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      placeholder="Full Name"
+                      value={passenger.fullName}
+                      onChange={(e) => handlePassengerChange(index, 'fullName', e.target.value)}
+                      className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Age"
+                      value={passenger.age}
+                      onChange={(e) => handlePassengerChange(index, 'age', e.target.value)}
+                      className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    />
+                    <select
+                      value={passenger.gender}
+                      onChange={(e) => handlePassengerChange(index, 'gender', e.target.value)}
+                      className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    >
+                      <option value="">Gender</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                      <option value="other">Other</option>
+                    </select>
+                    <input
+                      type="email"
+                      placeholder="Email"
+                      value={passenger.email}
+                      onChange={(e) => handlePassengerChange(index, 'email', e.target.value)}
+                      className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    />
+                    <input
+                      type="tel"
+                      placeholder="Phone Number"
+                      value={passenger.phoneNumber}
+                      onChange={(e) => handlePassengerChange(index, 'phoneNumber', e.target.value)}
+                      className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    />
+                    <select
+                      value={passenger.mealPreference}
+                      onChange={(e) => handlePassengerChange(index, 'mealPreference', e.target.value)}
+                      className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    >
+                      <option value="none">No Meal</option>
+                      <option value="vegetarian">Vegetarian</option>
+                      <option value="non-vegetarian">Non-Vegetarian</option>
+                      <option value="vegan">Vegan</option>
+                    </select>
                   </div>
                 </div>
-              )}
+              ))}
+            </div>
 
-              <div className="space-y-6 max-h-96 overflow-y-auto">
-                {passengerDetails.map((passenger, index) => (
-                  <div key={index} className="bg-slate-700 p-4 rounded-lg">
-                    <p className="text-white font-semibold mb-4">Passenger {index + 1}</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <input
-                        type="text"
-                        placeholder="Full Name"
-                        value={passenger.fullName}
-                        onChange={(e) => handlePassengerChange(index, 'fullName', e.target.value)}
-                        className="bg-slate-600 text-white px-3 py-2 rounded border border-slate-500 focus:border-blue-500 outline-none"
-                      />
-                      <input
-                        type="number"
-                        placeholder="Age"
-                        value={passenger.age}
-                        onChange={(e) => handlePassengerChange(index, 'age', e.target.value)}
-                        className="bg-slate-600 text-white px-3 py-2 rounded border border-slate-500 focus:border-blue-500 outline-none"
-                      />
-                      <select
-                        value={passenger.gender}
-                        onChange={(e) => handlePassengerChange(index, 'gender', e.target.value)}
-                        className="bg-slate-600 text-white px-3 py-2 rounded border border-slate-500 focus:border-blue-500 outline-none"
-                      >
-                        <option value="">Select Gender</option>
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other</option>
-                      </select>
-                      <input
-                        type="email"
-                        placeholder="Email"
-                        value={passenger.email}
-                        onChange={(e) => handlePassengerChange(index, 'email', e.target.value)}
-                        className="bg-slate-600 text-white px-3 py-2 rounded border border-slate-500 focus:border-blue-500 outline-none"
-                      />
-                      <input
-                        type="tel"
-                        placeholder="Phone Number"
-                        value={passenger.phoneNumber}
-                        onChange={(e) => handlePassengerChange(index, 'phoneNumber', e.target.value)}
-                        className="bg-slate-600 text-white px-3 py-2 rounded border border-slate-500 focus:border-blue-500 outline-none"
-                      />
-                      <select
-                        value={passenger.mealPreference}
-                        onChange={(e) => handlePassengerChange(index, 'mealPreference', e.target.value)}
-                        className="bg-slate-600 text-white px-3 py-2 rounded border border-slate-500 focus:border-blue-500 outline-none"
-                      >
-                        <option value="none">No Meal</option>
-                        <option value="vegetarian">Vegetarian</option>
-                        <option value="non-vegetarian">Non-Vegetarian</option>
-                        <option value="vegan">Vegan</option>
-                      </select>
-                    </div>
-                  </div>
-                ))}
+            <div className="p-6 bg-slate-50 border-t border-slate-200">
+              <div className="mb-4">
+                <p className="text-sm text-slate-600 mb-1">Total Amount</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  ₹{(parseFloat(selectedFlight.price) * parseInt(searchParams.passengers)).toLocaleString('en-IN')}
+                </p>
               </div>
-
-              <div className="border-t border-slate-600 mt-6 pt-6">
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div>
-                    <p className="text-slate-400 text-sm">Flight</p>
-                    <p className="text-white font-semibold">{selectedFlight.airline} {selectedFlight.flightNumber}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-sm">Route</p>
-                    <p className="text-white font-semibold">{selectedFlight.departureCity} → {selectedFlight.arrivalCity}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-sm">Date</p>
-                    <p className="text-white font-semibold">{selectedFlight.departureDate}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-sm">Passengers</p>
-                    <p className="text-white font-semibold">{searchParams.passengers}</p>
-                  </div>
-                </div>
-
-                <div className="bg-slate-700 p-4 rounded-lg mb-6">
-                  <p className="text-slate-400 text-sm">Total Price</p>
-                  <p className="text-blue-400 font-bold text-3xl">₹{(parseFloat(selectedFlight.price) * parseInt(searchParams.passengers)).toLocaleString('en-IN')}</p>
-                </div>
-
-                <div className="flex space-x-4">
-                  <button
-                    onClick={confirmBooking}
-                    disabled={loading}
-                    className="flex-1 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white px-6 py-3 rounded-lg transition font-semibold"
-                  >
-                    {loading ? 'Processing...' : 'Confirm Booking'}
-                  </button>
-                  <button
-                    onClick={() => setShowBookingModal(false)}
-                    className="flex-1 bg-slate-600 hover:bg-slate-700 text-white px-6 py-3 rounded-lg transition font-semibold"
-                  >
-                    Cancel
-                  </button>
-                </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={confirmBooking}
+                  disabled={loading}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
+                >
+                  {loading ? 'Processing...' : 'Confirm Booking'}
+                </button>
+                <button
+                  onClick={() => setShowBookingModal(false)}
+                  className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-3 px-4 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           </div>
